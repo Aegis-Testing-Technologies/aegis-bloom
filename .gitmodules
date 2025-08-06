@@ -1,0 +1,3 @@
+[submodule "aegis-techspike"]
+	path = rust/aegis-techspike
+	url = git@github.com:Aegis-Testing-Technologies/aegis-techspike.git
