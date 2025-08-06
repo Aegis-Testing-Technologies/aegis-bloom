@@ -4,24 +4,29 @@ import gzip
 import hashlib
 import json
 import logging
+import os
 from pathlib import Path
 from typing import List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
-# Import Rust bindings when available
-try:
-    from .aegis_bloom import (
-        create_bloom_filter,
-        add_to_bloom,
-        check_bloom,
-        save_bloom,
-        load_bloom,
-    )
-    RUST_AVAILABLE = True
-except ImportError:
-    RUST_AVAILABLE = False
-    logger.warning("Rust extensions not available, using pure Python fallback")
+# Import Rust bindings when available (unless explicitly disabled)
+RUST_AVAILABLE = False
+if not os.environ.get('AEGIS_BLOOM_NO_RUST'):
+    try:
+        from .aegis_bloom import (
+            create_bloom_filter,
+            add_to_bloom,
+            check_bloom,
+            save_bloom,
+            load_bloom,
+        )
+        RUST_AVAILABLE = True
+    except ImportError:
+        RUST_AVAILABLE = False
+        logger.warning("Rust extensions not available, using pure Python fallback")
+else:
+    logger.info("Rust extensions disabled by AEGIS_BLOOM_NO_RUST environment variable")
 
 
 class BloomFilter:
@@ -91,9 +96,12 @@ class BloomFilter:
         
         # Estimate chunks based on file sizes
         total_size = sum(f.stat().st_size for f in text_files if f.is_file())
-        expected_chunks = (total_size // chunk_size) * 2  # Overestimate for overlapping
+        expected_chunks = max(1000, (total_size // chunk_size) * 2)  # Overestimate for overlapping
         
-        bloom = cls(expected_items=expected_chunks, chunk_size=chunk_size, **kwargs)
+        # Remove expected_items from kwargs if present to avoid conflict
+        kwargs_filtered = {k: v for k, v in kwargs.items() if k != 'expected_items'}
+        
+        bloom = cls(expected_items=expected_chunks, chunk_size=chunk_size, **kwargs_filtered)
         
         for file_path in text_files:
             try:
